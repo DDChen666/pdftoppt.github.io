@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF 轉 PPTX 快速轉換器</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PDF.js for reading PDFs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- PptxGenJS for creating PowerPoint files -->
+    <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .drop-zone {
+            border: 2px dashed #cbd5e1;
+            transition: all 0.3s ease;
+        }
+        .drop-zone.dragover {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+            transform: scale(1.02);
+        }
+        .preview-card {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: transform 0.2s;
+        }
+        .preview-card:hover {
+            transform: translateY(-2px);
+        }
+        /* Loading Spinner */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center">
+                    <i class="fa-solid fa-file-powerpoint text-orange-600 text-2xl mr-3"></i>
+                    <h1 class="text-xl font-bold text-gray-800">PDF 轉 PPTX 轉換器</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">本地處理・無上傳風險</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow container mx-auto px-4 py-8 max-w-5xl">
+        
+        <!-- Upload Section -->
+        <div id="upload-section" class="bg-white rounded-xl p-8 mb-8 shadow-sm text-center">
+            <div id="drop-zone" class="drop-zone rounded-lg p-10 cursor-pointer group">
+                <input type="file" id="file-input" class="hidden" accept="application/pdf">
+                <div class="space-y-4">
+                    <div class="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto group-hover:bg-blue-100 transition-colors">
+                        <i class="fa-solid fa-cloud-arrow-up text-2xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-lg font-medium text-gray-700">點擊選擇或拖放 PDF 檔案至此</p>
+                        <p class="text-sm text-gray-500 mt-1">支援各種大小的 PDF 文件</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Processing/Preview Section (Hidden initially) -->
+        <div id="preview-section" class="hidden animate-fade-in">
+            
+            <!-- Toolbar -->
+            <div class="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-lg shadow-sm mb-6 border border-gray-100">
+                <div class="flex items-center mb-4 sm:mb-0">
+                    <div class="bg-red-100 text-red-600 p-2 rounded mr-3">
+                        <i class="fa-solid fa-file-pdf"></i>
+                    </div>
+                    <div>
+                        <h3 id="filename-display" class="font-semibold text-gray-800 truncate max-w-[200px]">filename.pdf</h3>
+                        <p id="page-count-display" class="text-sm text-gray-500">共 0 頁</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-3 w-full sm:w-auto">
+                    <div id="processing-status" class="hidden flex items-center text-sm text-blue-600">
+                        <div class="loader mr-2"></div>
+                        <span id="status-text">處理中...</span>
+                    </div>
+                    <button id="download-btn" disabled class="flex-1 sm:flex-none bg-orange-600 hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg font-medium transition-colors shadow-sm flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-download"></i> 下載 PPTX
+                    </button>
+                    <button id="reset-btn" class="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Settings -->
+            <div class="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6 text-sm text-blue-800 flex items-start">
+                <i class="fa-solid fa-circle-info mt-0.5 mr-2"></i>
+                <p>為了確保排版 100% 準確，此工具將 PDF 頁面轉換為高解析度圖片並置入 PPTX。您可以在 PowerPoint 中於圖片上方新增文字方塊進行編輯。</p>
+            </div>
+
+            <!-- Grid Preview -->
+            <div id="slides-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                <!-- Slides will be injected here -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 mt-auto py-6">
+        <div class="container mx-auto px-4 text-center text-gray-500 text-sm">
+            <p>&copy; 2024 PDF to PPTX Converter. 純前端處理，您的檔案不會上傳至伺服器。</p>
+        </div>
+    </footer>
+
+    <script>
+        // --- Configuration ---
+        // Setup PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // --- DOM Elements ---
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const uploadSection = document.getElementById('upload-section');
+        const previewSection = document.getElementById('preview-section');
+        const slidesContainer = document.getElementById('slides-container');
+        const filenameDisplay = document.getElementById('filename-display');
+        const pageCountDisplay = document.getElementById('page-count-display');
+        const downloadBtn = document.getElementById('download-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const processingStatus = document.getElementById('processing-status');
+        const statusText = document.getElementById('status-text');
+
+        // --- State ---
+        let currentPDF = null;
+        let pdfDoc = null;
+        let totalPages = 0;
+        let processedImages = []; // Stores data URLs
+        let isProcessing = false;
+
+        // --- Event Listeners ---
+        
+        // Drag and Drop
+        dropZone.addEventListener('click', () => fileInput.click());
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type === 'application/pdf') {
+                handleFile(files[0]);
+            } else {
+                alert('請上傳有效的 PDF 檔案');
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        resetBtn.addEventListener('click', resetApp);
+
+        downloadBtn.addEventListener('click', generatePPTX);
+
+        // --- Core Functions ---
+
+        async function handleFile(file) {
+            currentPDF = file;
+            filenameDisplay.textContent = file.name;
+            
+            // UI Switch
+            uploadSection.classList.add('hidden');
+            previewSection.classList.remove('hidden');
+            
+            // Start Processing
+            startProcessing();
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
+                totalPages = pdfDoc.numPages;
+                pageCountDisplay.textContent = `共 ${totalPages} 頁`;
+
+                // Render pages sequentially to avoid memory spikes
+                processedImages = [];
+                slidesContainer.innerHTML = ''; // Clear previous
+
+                for (let i = 1; i <= totalPages; i++) {
+                    updateStatus(`正在處理第 ${i} / ${totalPages} 頁...`);
+                    const imageData = await renderPage(i);
+                    processedImages.push(imageData);
+                    addSlidePreview(i, imageData);
+                }
+
+                finishProcessing();
+
+            } catch (error) {
+                console.error(error);
+                alert('讀取 PDF 時發生錯誤。可能是檔案已損壞或受密碼保護。');
+                resetApp();
+            }
+        }
+
+        async function renderPage(pageNumber) {
+            const page = await pdfDoc.getPage(pageNumber);
+            
+            // Scale logic: 
+            // We render at a higher scale (2.0) for better quality in PPTX, 
+            // but we might display smaller in preview.
+            const scale = 2.0; 
+            const viewport = page.getViewport({ scale: scale });
+
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            const renderContext = {
+                canvasContext: context,
+                viewport: viewport
+            };
+
+            await page.render(renderContext).promise;
+            
+            // Convert to JPEG for smaller file size than PNG, but High Quality
+            return canvas.toDataURL('image/jpeg', 0.85); 
+        }
+
+        function addSlidePreview(pageNumber, dataUrl) {
+            const card = document.createElement('div');
+            card.className = 'preview-card bg-white rounded-lg overflow-hidden flex flex-col relative animate-fade-in';
+            card.innerHTML = `
+                <div class="relative pt-[75%] bg-gray-200">
+                    <img src="${dataUrl}" class="absolute top-0 left-0 w-full h-full object-contain" alt="Page ${pageNumber}">
+                </div>
+                <div class="p-3 bg-white border-t border-gray-100 flex justify-between items-center">
+                    <span class="font-medium text-gray-700">第 ${pageNumber} 頁</span>
+                    <i class="fa-regular fa-circle-check text-green-500"></i>
+                </div>
+            `;
+            slidesContainer.appendChild(card);
+        }
+
+        async function generatePPTX() {
+            if (processedImages.length === 0) return;
+
+            const originalText = downloadBtn.innerHTML;
+            downloadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 打包中...';
+            downloadBtn.disabled = true;
+
+            try {
+                // Initialize PptxGenJS
+                let pres = new PptxGenJS();
+                
+                // Get page dimensions from the first page (assuming consistent size, otherwise logic needs complexity)
+                // We use standard 16:9 or calculate based on the first image aspect ratio
+                // Let's rely on PptxGenJS layout 'LAYOUT_16x9' default, but fit images to cover.
+
+                processedImages.forEach((imgData, index) => {
+                    let slide = pres.addSlide();
+                    
+                    // Add image to slide
+                    // x, y, w, h in inches or percentages. 
+                    // '100%' ensures it fits the slide.
+                    slide.addImage({ 
+                        data: imgData, 
+                        x: 0, 
+                        y: 0, 
+                        w: '100%', 
+                        h: '100%',
+                        sizing: { type: 'contain', w: '100%', h: '100%' } // Maintain aspect ratio
+                    });
+                });
+
+                // Save
+                const fileName = currentPDF.name.replace('.pdf', '') + '_converted.pptx';
+                await pres.writeFile({ fileName: fileName });
+
+            } catch (error) {
+                console.error(error);
+                alert('建立 PPTX 檔案時發生錯誤');
+            } finally {
+                downloadBtn.innerHTML = originalText;
+                downloadBtn.disabled = false;
+            }
+        }
+
+        // --- Helper Functions ---
+
+        function startProcessing() {
+            isProcessing = true;
+            processingStatus.classList.remove('hidden');
+            downloadBtn.disabled = true;
+            dropZone.classList.add('pointer-events-none', 'opacity-50');
+        }
+
+        function updateStatus(text) {
+            statusText.textContent = text;
+        }
+
+        function finishProcessing() {
+            isProcessing = false;
+            processingStatus.classList.add('hidden');
+            downloadBtn.disabled = false;
+            dropZone.classList.remove('pointer-events-none', 'opacity-50');
+            statusText.textContent = '完成';
+        }
+
+        function resetApp() {
+            currentPDF = null;
+            pdfDoc = null;
+            processedImages = [];
+            totalPages = 0;
+            fileInput.value = '';
+            
+            uploadSection.classList.remove('hidden');
+            previewSection.classList.add('hidden');
+            slidesContainer.innerHTML = '';
+            
+            downloadBtn.disabled = true;
+        }
+    </script>
+</body>
+</html>
